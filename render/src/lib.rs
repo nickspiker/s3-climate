@@ -15,7 +15,7 @@ pub const WHITE: u8 = 1;
 pub const YELLOW: u8 = 2;
 pub const RED: u8 = 3;
 
-/// One hour's averages: temperature in tenths of a °C, relative humidity in tenths of a percent.
+/// One hour's averages: temperature in hundredths of a °C, relative humidity in hundredths of a percent.
 #[derive(Clone, Copy, Debug)]
 pub struct Reading {
     pub temp: i16,
@@ -51,7 +51,7 @@ const TICK_Y: i32 = BOTTOM + 3;
 const DAY_BASELINE: i32 = 199;
 const READOUT_BASELINE: i32 = 40;
 
-/// One axis's range, in tenths, and the step between its numbers.
+/// One axis's range, in hundredths, and the step between its numbers.
 #[derive(Clone, Copy)]
 struct Axis {
     lo: i32,
@@ -60,7 +60,7 @@ struct Axis {
 }
 
 impl Axis {
-    /// Fit the week's values: the smallest step of 1, 2, 5, 10 or 20 units that labels the range (rounded out to whole steps) with at most five numbers, the range at least `min_span` (tenths) so a nearly flat week doesn't blow sensor noise up to full height. With no values, `fallback`.
+    /// Fit the week's values: the smallest step of 1, 2, 5, 10 or 20 units that labels the range (rounded out to whole steps) with at most five numbers, the range at least `min_span` (hundredths) so a nearly flat week doesn't blow sensor noise up to full height. With no values, `fallback`.
     fn fit(values: impl Iterator<Item = i16> + Clone, fallback: (i32, i32), min_span: i32) -> Axis {
         let (lo, hi) = match (values.clone().min(), values.max()) {
             (Some(a), Some(b)) => (a as i32, b as i32),
@@ -69,17 +69,17 @@ impl Axis {
         // Widen about the middle to the minimum span.
         let short = (min_span - (hi - lo)).max(0);
         let (lo, hi) = (lo - short / 2, hi + (short - short / 2));
-        for step in [10, 20, 50, 100, 200] {
+        for step in [100, 200, 500, 1000, 2000] {
             let (a, b) = (lo.div_euclid(step) * step, -(-hi).div_euclid(step) * step);
             if (b - a) / step + 1 <= 5 {
                 return Axis { lo: a, hi: b, step };
             }
         }
-        Axis { lo: lo.div_euclid(500) * 500, hi: -(-hi).div_euclid(500) * 500, step: 500 }
+        Axis { lo: lo.div_euclid(5000) * 5000, hi: -(-hi).div_euclid(5000) * 5000, step: 5000 }
     }
 
-    fn y(&self, tenths: i32) -> i32 {
-        (BOTTOM - ((tenths - self.lo) * SPAN + (self.hi - self.lo) / 2) / (self.hi - self.lo)).clamp(BOTTOM - SPAN, BOTTOM)
+    fn y(&self, v: i32) -> i32 {
+        (BOTTOM - ((v - self.lo) * SPAN + (self.hi - self.lo) / 2) / (self.hi - self.lo)).clamp(BOTTOM - SPAN, BOTTOM)
     }
 }
 
@@ -94,7 +94,7 @@ pub fn render(px: &mut [u8; W * H], history: &[Option<Reading>; HOURS], current:
         }
     }
     let week = history.iter().flatten().chain(current.iter());
-    let axes = [Axis::fit(week.clone().map(|r| r.temp), (180, 260), 20), Axis::fit(week.map(|r| r.humidity), (300, 600), 40)];
+    let axes = [Axis::fit(week.clone().map(|r| r.temp), (1800, 2600), 200), Axis::fit(week.map(|r| r.humidity), (3000, 6000), 400)];
     let value = |pick: usize, r: &Reading| if pick == 0 { r.temp } else { r.humidity } as i32;
     // Humidity first, then temperature: where either lands on the other, white.
     for (pick, ink) in [(1, YELLOW), (0, RED)] {
@@ -112,8 +112,8 @@ pub fn render(px: &mut [u8; W * H], history: &[Option<Reading>; HOURS], current:
         let axis = &axes[pick];
         let mut v = axis.lo;
         while v <= axis.hi {
-            let mut buf = [0u8; 8];
-            let s = number(&mut buf, v / 10, "");
+            let mut buf = [0u8; 10];
+            let s = number(&mut buf, v / 100, 0, "");
             let (x, align) = if pick == 0 { (LEFT - 1, Align::Right) } else { (RIGHT + 1, Align::Left) };
             text(px, &AXIS, s, x, axis.y(v) + cap / 2, align, ink);
             v += axis.step;
@@ -143,13 +143,13 @@ pub fn render(px: &mut [u8; W * H], history: &[Option<Reading>; HOURS], current:
         day += 1;
     }
 
-    // Now, large: temperature on the left, humidity on the right, rounded to whole units.
+    // Now, large: temperature against the left edge, humidity against the right, to tenths.
     if let Some(r) = current {
-        let mut buf = [0u8; 8];
-        let t = number(&mut buf, (r.temp as i32 + 5).div_euclid(10), "°");
-        text(px, &BIG, t, W as i32 / 4 + 4, READOUT_BASELINE, Align::Centre, RED);
-        let h = number(&mut buf, (r.humidity as i32 + 5).div_euclid(10), "%");
-        text(px, &BIG, h, 3 * W as i32 / 4, READOUT_BASELINE, Align::Centre, YELLOW);
+        let mut buf = [0u8; 10];
+        let t = number(&mut buf, (r.temp as i32 + 5).div_euclid(10), 1, "°");
+        text(px, &BIG, t, 1, READOUT_BASELINE, Align::Left, RED);
+        let h = number(&mut buf, (r.humidity as i32 + 5).div_euclid(10), 1, "%");
+        text(px, &BIG, h, W as i32 - 1, READOUT_BASELINE, Align::Right, YELLOW);
     }
 }
 
@@ -212,26 +212,27 @@ fn text(px: &mut [u8; W * H], font: &Font, s: &str, x: i32, baseline: i32, align
     }
 }
 
-/// `n` in decimal followed by `unit`, written into `buf`.
-fn number<'a>(buf: &'a mut [u8; 8], n: i32, unit: &str) -> &'a str {
-    let mut digits = [0u8; 6];
+/// `n` in decimal with its last `decimals` digits after a point (so 224 with 1 is "22.4"), followed by `unit`, written into `buf`.
+fn number<'a>(buf: &'a mut [u8; 10], n: i32, decimals: usize, unit: &str) -> &'a str {
+    let mut digits = [0u8; 7];
     let (mut m, mut k) = (n.unsigned_abs(), 0);
-    loop {
+    while k == 0 || m != 0 || k <= decimals {
         digits[k] = b'0' + (m % 10) as u8;
         k += 1;
         m /= 10;
-        if m == 0 {
-            break;
-        }
     }
     let mut len = 0;
     if n < 0 {
         buf[0] = b'-';
         len = 1;
     }
-    for d in digits[..k].iter().rev() {
+    for (i, d) in digits[..k].iter().enumerate().rev() {
         buf[len] = *d;
         len += 1;
+        if i == decimals && decimals > 0 {
+            buf[len] = b'.';
+            len += 1;
+        }
     }
     buf[len..len + unit.len()].copy_from_slice(unit.as_bytes());
     len += unit.len();

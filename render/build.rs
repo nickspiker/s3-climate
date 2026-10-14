@@ -13,8 +13,8 @@ fn main() {
     let ttf = std::fs::read(TTF).expect("read font");
     let font = FontRef::try_from_slice(&ttf).expect("parse font");
     let mut src = String::new();
-    // Readouts: the current temperature and humidity.
-    emit(&mut src, &font, "BIG", 44.0, "0123456789-°%");
+    // Readouts: the current temperature and humidity, to tenths; at 36 px both fit side by side.
+    emit(&mut src, &font, "BIG", 36.0, "0123456789-.°%");
     pixel_font(&mut src, "AXIS", "axis", "0123456789");
     // Labels: day names, and the dozenal digits Zil..Stelor (U+0010..U+001B).
     let small: String = "SMTWFuoehra".chars().chain((0x10..0x1C).filter_map(char::from_u32)).collect();

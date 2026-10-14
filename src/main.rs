@@ -28,7 +28,8 @@ include!(concat!(env!("OUT_DIR"), "/build_time.rs"));
 const SAMPLE_S: i64 = 600;
 /// An hour with no reading.
 const NONE: i16 = i16::MIN;
-const MAGIC: u32 = 0x434C_4D31;
+/// Bumped when State's meaning changes, so a kept state from older firmware is dropped rather than misread (2: hundredths).
+const MAGIC: u32 = 0x434C_4D32;
 
 /// What deep sleep keeps: the week of hourly averages and the newest hour's running sums.
 #[derive(Clone, Copy)]
