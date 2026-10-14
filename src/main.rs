@@ -134,6 +134,7 @@ fn main() -> ! {
     };
     println!("battery: {battery_mv} mV, {} permille", battery_permille(battery_mv));
 
+    let mut low_power = LowPower::new(p.LPWR);
     let mut i2c = I2c::new(p.I2C0, I2cConfig::default().with_frequency(Rate::from_khz(100))).expect("I2C").with_sda(p.GPIO47).with_scl(p.GPIO48);
     let now = match sensors::clock(&mut i2c) {
         Some(t) => t,
@@ -179,10 +180,28 @@ fn main() -> ! {
         // SAFETY: as for STATE.
         let canvas = unsafe { &mut *core::ptr::addr_of_mut!(CANVAS) };
         render(canvas, &state.history(), reading, Some(battery_permille(battery_mv)), now);
-        let started = Instant::now();
-        let shown = panel.init() && panel.show(canvas);
+        // The refresh runs on its own for ~20 s: on battery, light-sleep through it in quarter seconds instead of polling awake, with the panel's power and control lines held so they can't drift. With a USB host attached, poll awake instead: the USB serial port doesn't survive light sleep, and power doesn't matter there. Capped at a minute.
+        let nap = !usb_host(&delay, 20);
+        let mut naps = 0;
+        let shown = panel.init() && {
+            panel.start(canvas);
+            panel.hold(true);
+            panel_power.set_pad_hold(true);
+            while panel.busy() && naps < 240 {
+                if nap {
+                    low_power.set_wakeup_deadline(Instant::now() + Duration::from_millis(250));
+                    low_power.sleep_light(RtcSleepConfig::default());
+                } else {
+                    delay.delay_millis(250);
+                }
+                naps += 1;
+            }
+            panel.hold(false);
+            panel_power.set_pad_hold(false);
+            !panel.busy()
+        };
         panel.sleep();
-        println!("panel: {} after {} ms", if shown { "drawn" } else { "timed out" }, started.elapsed().as_millis());
+        println!("panel: {} after {naps} quarter seconds ({})", if shown { "drawn" } else { "timed out" }, if nap { "light sleep" } else { "awake" });
         // Only a finished refresh counts; otherwise the next wake tries again.
         if shown {
             state.drawn = hour;
@@ -199,7 +218,6 @@ fn main() -> ! {
         delay.delay_millis(wait as u32 * 1000);
         esp_hal::system::software_reset();
     }
-    let mut low_power = LowPower::new(p.LPWR);
     low_power.set_wakeup_deadline(Instant::now() + Duration::from_secs(wait));
     // The default deep sleep powers RTC slow memory down too; keep it, it holds the week.
     let mut config = RtcSleepConfig::deep();

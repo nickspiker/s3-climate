@@ -84,8 +84,8 @@ impl Epd<'_> {
         self.wait()
     }
 
-    /// Send the canvas (one ink code per pixel) and refresh the panel with it.
-    pub fn show(&mut self, px: &[u8; W * H]) -> bool {
+    /// Send the canvas (one ink code per pixel) and start the refresh, which runs about 20 s on its own with busy low.
+    pub fn start(&mut self, px: &[u8; W * H]) {
         self.command(0x10, &[]);
         self.dc.set_high();
         self.cs.set_low();
@@ -99,7 +99,20 @@ impl Epd<'_> {
         }
         self.cs.set_high();
         self.command(0x12, &[0x00]); // refresh
-        self.wait()
+        // Busy drops within a millisecond of the command.
+        self.delay.delay_millis(5);
+    }
+
+    /// Whether the controller is still working.
+    pub fn busy(&self) -> bool {
+        self.busy.is_low()
+    }
+
+    /// Hold (or release) the lines that must not move while the chip sleeps through a refresh: a dropped reset would abort it.
+    pub fn hold(&mut self, on: bool) {
+        for line in [&mut self.rst, &mut self.cs, &mut self.dc] {
+            line.set_pad_hold(on);
+        }
     }
 
     /// Drive the control lines low, before the panel's power is cut: held high, they would feed the unpowered controller through its input protection.
