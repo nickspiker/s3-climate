@@ -1,0 +1,10 @@
+[package]
+name = "climate-preview"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Render the climate panel on the PC, from mock data, through the same code the firmware runs"
+
+[dependencies]
+climate-render = { path = "../../render" }
+png = "0.18"

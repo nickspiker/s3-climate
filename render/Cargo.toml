@@ -1,0 +1,10 @@
+[package]
+name = "climate-render"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "The week of indoor temperature and humidity on the 200×200 four-colour e-paper: integer-only, no_std, shared by the firmware and the PC preview"
+
+[build-dependencies]
+ab_glyph = "0.2"
+png = "0.17"

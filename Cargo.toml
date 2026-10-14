@@ -1,0 +1,30 @@
+[package]
+name = "s3-climate"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Firmware for the Waveshare ESP32-S3-ePaper-1.54G: a week of indoor temperature and humidity from its SHTC3, on battery, waking every 10 minutes"
+
+[[bin]]
+name = "s3-climate"
+path = "src/main.rs"
+test = false
+doctest = false
+bench = false
+
+[dependencies]
+esp-hal = { version = "~1.2.2", features = ["esp32s3", "unstable"] }
+esp-bootloader-esp-idf = { version = "0.6.0", features = ["esp32s3"] }
+esp-backtrace = { version = "0.20.0", features = ["esp32s3", "panic-handler", "println"] }
+# USB serial only: the default "auto" mode reads the wrong register on the S3 (the FIFO at 0x6003_8000 instead of the interrupt flags at 0x6003_8008), so it sends output to the UART pins at random.
+esp-println = { version = "0.18.0", default-features = false, features = ["esp32s3", "jtag-serial", "critical-section"] }
+climate-render = { path = "render" }
+
+[profile.release]
+opt-level = "s"
+debug = 2
+lto = "fat"
+codegen-units = 1
+
+[profile.dev]
+opt-level = "s"

@@ -1,0 +1,3 @@
+# The Espressif Rust fork for the S3's Xtensa core, installed by espup under /mnt/Harbor (home is wiped daily).
+[toolchain]
+path = "/mnt/Harbor/Code/toolchains/rustup/toolchains/esp"
