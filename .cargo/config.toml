@@ -2,9 +2,9 @@
 runner = "espflash flash --monitor --chip esp32s3"
 # The linker that espup installed alongside the toolchain.
 linker = "/mnt/Harbor/Code/toolchains/rustup/toolchains/esp/xtensa-esp-elf/esp-16.2.0_20260914/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc"
+rustflags = ["-C", "link-arg=-nostartfiles", "-C", "link-arg=-Wl,--no-warn-rwx-segments"]
 
 [build]
-rustflags = ["-C", "link-arg=-nostartfiles", "-C", "link-arg=-Wl,--no-warn-rwx-segments"]
 target = "xtensa-esp32s3-none-elf"
 
 [unstable]

@@ -22,7 +22,7 @@ fn main() {
         *slot = Some(Reading { temp: (212.0 + 14.0 * day + 8.0 * drift + 2.0 * wobble) as i16, humidity: (470.0 - 60.0 * day - 40.0 * drift + 8.0 * wobble) as i16 });
     }
     let mut px = Box::new([0u8; W * H]);
-    render(&mut px, &history, history[HOURS - 1], now);
+    render(&mut px, &history, history[HOURS - 1], Some(620), now);
 
     const Z: usize = 3;
     let ink = |v: u8| match v {

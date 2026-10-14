@@ -1,6 +1,6 @@
 //! The week of indoor climate on the 200×200 four-colour e-paper (black, white, yellow, red), integers only, for the firmware and the PC preview alike.
 //!
-//! Layout: the current temperature (red) and humidity (yellow) large across the top; below them the last 168 hours, one pixel column per hour with the newest at the right edge, as 2 px lines on black: temperature red, humidity yellow, white where they cross. Each auto-ranges to its own week of values, numbered in its line's colour beside the plot: temperature (°C) on the left, humidity (%) on the right. A white tick at each local midnight (US Pacific, daylight saving included) and the day's name under it.
+//! Layout: a one-pixel battery bar along the top edge (yellow track, red fill); the current temperature (red) and humidity (yellow) large below it; below them the last 168 hours, one pixel column per hour with the newest at the right edge, as 2 px lines on black: temperature red, humidity yellow, white where they cross. Each auto-ranges to its own week of values, numbered in its line's colour beside the plot: temperature (°C) on the left, humidity (%) on the right. A white tick at each local midnight (US Pacific, daylight saving included) and the day's name under it.
 
 #![no_std]
 
@@ -83,9 +83,16 @@ impl Axis {
     }
 }
 
-/// Draw the week ending in the hour holding `now` (unix seconds) into `px` (one ink per pixel, row by row). `history[i]` is the hour starting at (now / 3600 − 167 + i) · 3600, so the newest is last; None where there's no reading. `current` is shown large at the top.
-pub fn render(px: &mut [u8; W * H], history: &[Option<Reading>; HOURS], current: Option<Reading>, now: i64) {
+/// Draw the week ending in the hour holding `now` (unix seconds) into `px` (one ink per pixel, row by row). `history[i]` is the hour starting at (now / 3600 − 167 + i) · 3600, so the newest is last; None where there's no reading. `current` is shown large at the top. `battery`: charge in permille, for the bar along the top edge.
+pub fn render(px: &mut [u8; W * H], history: &[Option<Reading>; HOURS], current: Option<Reading>, battery: Option<u16>, now: i64) {
     px.fill(BLACK);
+    // The battery: the top row, red from the left as far as the charge, yellow beyond.
+    if let Some(permille) = battery {
+        let fill = (permille.min(1000) as usize * W + 500) / 1000;
+        for (x, p) in px[..W].iter_mut().enumerate() {
+            *p = if x < fill { RED } else { YELLOW };
+        }
+    }
     let week = history.iter().flatten().chain(current.iter());
     let axes = [Axis::fit(week.clone().map(|r| r.temp), (180, 260), 20), Axis::fit(week.map(|r| r.humidity), (300, 600), 40)];
     let value = |pick: usize, r: &Reading| if pick == 0 { r.temp } else { r.humidity } as i32;
@@ -280,4 +287,25 @@ pub fn tz_offset_secs(unix: i64) -> i64 {
     let dst_start = nth_sunday_unix(year, 3, 2, 10); // 02:00 PST = 10:00 UTC
     let dst_end = nth_sunday_unix(year, 11, 1, 9); // 02:00 PDT = 09:00 UTC
     if unix >= dst_start && unix < dst_end { -7 * 3600 } else { -8 * 3600 }
+}
+
+/// A 1S LiPo's charge (permille) from its resting voltage (mV), on the standard discharge curve (the tide clock's): empty at 3.27 V and below, full at 4.20 V and above. Sample after minutes idle, so the cell is near open-circuit.
+pub fn battery_permille(mv: u16) -> u16 {
+    // (mV, permille), descending.
+    const CURVE: [(u16, u16); 21] = [
+        (4200, 1000), (4150, 950), (4110, 900), (4080, 850), (4020, 800),
+        (3980, 750), (3950, 700), (3910, 650), (3870, 600), (3850, 550),
+        (3840, 500), (3820, 450), (3800, 400), (3790, 350), (3770, 300),
+        (3750, 250), (3730, 200), (3710, 150), (3690, 100), (3610, 50),
+        (3270, 0),
+    ];
+    if mv >= CURVE[0].0 {
+        return 1000;
+    }
+    let i = CURVE.iter().position(|&(v, _)| mv >= v).unwrap_or(CURVE.len());
+    if i == CURVE.len() {
+        return 0;
+    }
+    let ((hv, hp), (lv, lp)) = (CURVE[i - 1], CURVE[i]);
+    lp + ((hp - lp) as u32 * (mv - lv) as u32 / (hv - lv) as u32) as u16
 }

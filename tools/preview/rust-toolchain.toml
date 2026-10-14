@@ -1,0 +1,3 @@
+# The repo root pins the Xtensa toolchain (with build-std) for the firmware; this host tool builds on stable.
+[toolchain]
+channel = "stable"

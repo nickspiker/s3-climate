@@ -10,8 +10,9 @@
 mod epd;
 mod sensors;
 
-use climate_render::{H, HOURS, Reading, W, render};
+use climate_render::{H, HOURS, Reading, W, battery_permille, render};
 use esp_backtrace as _;
+use esp_hal::analog::adc::{Adc, AdcCalCurve, AdcConfig, Attenuation};
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig};
@@ -123,6 +124,16 @@ fn main() -> ! {
     panel_power.set_low();
     delay.delay_millis(10);
 
+    // The battery, through its ÷2 divider on GPIO4 (always connected): averaged over 16 reads, at rest, before the rails and the panel draw current.
+    let battery_mv = {
+        let mut config = AdcConfig::new();
+        let mut pin = config.enable_pin_with_cal::<_, AdcCalCurve<_>>(p.GPIO4, Attenuation::_11dB);
+        let mut adc = Adc::new(p.ADC1, config);
+        let sum: u32 = (0..16).map(|_| adc.read_blocking(&mut pin) as u32).sum();
+        (sum / 16 * 2) as u16
+    };
+    println!("battery: {battery_mv} mV, {} permille", battery_permille(battery_mv));
+
     let mut i2c = I2c::new(p.I2C0, I2cConfig::default().with_frequency(Rate::from_khz(100))).expect("I2C").with_sda(p.GPIO47).with_scl(p.GPIO48);
     let now = match sensors::clock(&mut i2c) {
         Some(t) => t,
@@ -167,7 +178,7 @@ fn main() -> ! {
         };
         // SAFETY: as for STATE.
         let canvas = unsafe { &mut *core::ptr::addr_of_mut!(CANVAS) };
-        render(canvas, &state.history(), reading, now);
+        render(canvas, &state.history(), reading, Some(battery_permille(battery_mv)), now);
         let started = Instant::now();
         let shown = panel.init() && panel.show(canvas);
         panel.sleep();
