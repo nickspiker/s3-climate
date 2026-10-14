@@ -79,7 +79,7 @@ impl Axis {
     }
 
     fn y(&self, v: i32) -> i32 {
-        (BOTTOM - ((v - self.lo) * SPAN + (self.hi - self.lo) / 2) / (self.hi - self.lo)).clamp(BOTTOM - SPAN, BOTTOM)
+        (BOTTOM - ((v - self.lo) * SPAN).div_euclid(self.hi - self.lo)).clamp(BOTTOM - SPAN, BOTTOM)
     }
 }
 
@@ -88,7 +88,7 @@ pub fn render(px: &mut [u8; W * H], history: &[Option<Reading>; HOURS], current:
     px.fill(BLACK);
     // The battery: the top row, red from the left as far as the charge, yellow beyond.
     if let Some(permille) = battery {
-        let fill = (permille.min(1000) as usize * W + 500) / 1000;
+        let fill = permille.min(1000) as usize * W / 1000;
         for (x, p) in px[..W].iter_mut().enumerate() {
             *p = if x < fill { RED } else { YELLOW };
         }
@@ -143,12 +143,12 @@ pub fn render(px: &mut [u8; W * H], history: &[Option<Reading>; HOURS], current:
         day += 1;
     }
 
-    // Now, large: temperature against the left edge, humidity against the right, to tenths.
+    // Now, large: temperature against the left edge, humidity against the right, floored to tenths.
     if let Some(r) = current {
         let mut buf = [0u8; 10];
-        let t = number(&mut buf, (r.temp as i32 + 5).div_euclid(10), 1, "°");
+        let t = number(&mut buf, (r.temp as i32).div_euclid(10), 1, "°");
         text(px, &BIG, t, 1, READOUT_BASELINE, Align::Left, RED);
-        let h = number(&mut buf, (r.humidity as i32 + 5).div_euclid(10), 1, "%");
+        let h = number(&mut buf, (r.humidity as i32).div_euclid(10), 1, "%");
         text(px, &BIG, h, W as i32 - 1, READOUT_BASELINE, Align::Right, YELLOW);
     }
 }

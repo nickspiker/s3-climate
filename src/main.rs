@@ -72,12 +72,12 @@ impl State {
         (self.newest, self.n, self.sum_temp, self.sum_humidity) = (hour, 0, 0, 0);
     }
 
-    /// Fold a reading into the newest hour's average (rounded).
+    /// Fold a reading into the newest hour's average (floored).
     fn add(&mut self, r: Reading) {
         self.n += 1;
         self.sum_temp += r.temp as i32;
         self.sum_humidity += r.humidity as i32;
-        let avg = |sum: i32| (sum + self.n / 2).div_euclid(self.n) as i16;
+        let avg = |sum: i32| sum.div_euclid(self.n) as i16;
         self.temp[HOURS - 1] = avg(self.sum_temp);
         self.humidity[HOURS - 1] = avg(self.sum_humidity);
     }

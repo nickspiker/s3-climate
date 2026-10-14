@@ -22,8 +22,8 @@ pub fn shtc3(i2c: &mut I2c<'_, Blocking>, delay: &Delay) -> Option<Reading> {
         return None;
     }
     let (t, rh) = (u16::from_be_bytes([b[0], b[1]]) as i32, u16::from_be_bytes([b[3], b[4]]) as i32);
-    // T = −45 + 175 · raw / 2^16 °C, RH = 100 · raw / 2^16 %, both in hundredths (the sensor's own resolution) and rounded.
-    Some(Reading { temp: (((17500 * t + 32768) >> 16) - 4500) as i16, humidity: ((10000 * rh + 32768) >> 16) as i16 })
+    // T = −45 + 175 · raw / 2^16 °C, RH = 100 · raw / 2^16 %, both in hundredths (the sensor's own resolution), floored: humidity tops out at 99.99 %.
+    Some(Reading { temp: (((17500 * t) >> 16) - 4500) as i16, humidity: ((10000 * rh) >> 16) as i16 })
 }
 
 /// Sensirion's CRC-8: polynomial 0x31, initial 0xFF.
